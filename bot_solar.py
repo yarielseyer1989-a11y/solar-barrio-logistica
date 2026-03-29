@@ -3,7 +3,6 @@ import http.server
 import socketserver
 import threading
 import os
-import asyncio
 import psycopg2
 import logging
 import re
@@ -65,8 +64,14 @@ def obtener_horas_disponibles(fecha_str):
 # --- 4. FUNCIONES DEL BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     teclado = [['☀️ Ver Productos y Soluciones'], ['📊 Solicitar Estudio Gratuito']]
+    mensaje_bienvenida = (
+        "¡Hola! Bienvenido a *Solar Barrio* ☀️.\n\n"
+        "Estamos encantados de ayudarte a dar el salto a la energía limpia, "
+        "ahorrar en tu factura y protegerte de los apagones.\n\n"
+        "¿En qué podemos asesorarte hoy?"
+    )
     await update.message.reply_text(
-        "¡Hola! Bienvenido a *Solar Barrio* ☀️.\n\nEstamos encantados de ayudarte a dar el salto a la energía limpia, ahorrar en tu factura y protegerte de los apagones.\n\n¿En qué podemos asesorarte hoy?",
+        mensaje_bienvenida,
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(teclado, one_time_keyboard=True, resize_keyboard=True)
     )
@@ -79,32 +84,42 @@ async def manejar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 🟢 *Kit Ahorro:* Perfecto para reducir tu factura al máximo.
 🔋 *Kit Anti-Apagones:* Baterías de respaldo para que tu casa siga con luz.
-⚡ *Kit Independencia:* Libertad absoluta de la compañía eléctrica.\n\n¿Te gustaría un estudio personalizado?",
+⚡ *Kit Independencia:* Libertad absoluta de la compañía eléctrica.
+
+¿Te gustaría un estudio personalizado?"""
+        await update.message.reply_text(
+            mensaje_kits,
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardMarkup([['📊 Solicitar Estudio Gratuito']], resize_keyboard=True)
         )
         return MENU
     elif "Solicitar" in opcion:
-        await update.message.reply_text("🏠 ¿Qué tipo de vivienda tienes?", 
-            reply_markup=ReplyKeyboardMarkup([['Casa independiente', 'Adosado / Chalet'], ['Piso / Apartamento', 'Negocio / Local']], resize_keyboard=True))
+        await update.message.reply_text(
+            "¡Genial! Vamos a diseñar algo a tu medida. 🏠 Primero, ¿qué tipo de vivienda tienes?", 
+            reply_markup=ReplyKeyboardMarkup([['Casa independiente', 'Adosado / Chalet'], ['Piso / Apartamento', 'Negocio / Local']], resize_keyboard=True)
+        )
         return VIVIENDA
     return await start(update, context)
 
 async def recibir_vivienda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['vivienda'] = update.message.text
-    await update.message.reply_text("⚡ ¿Cuál dirías que es tu problema principal ahora mismo?", 
-        reply_markup=ReplyKeyboardMarkup([['Cortes de luz / Apagones', 'Facturas muy caras'], ['Ambas opciones']], resize_keyboard=True))
+    await update.message.reply_text(
+        "Entendido. ⚡ ¿Cuál dirías que es tu problema principal ahora mismo?", 
+        reply_markup=ReplyKeyboardMarkup([['Cortes de luz / Apagones', 'Facturas muy caras'], ['Ambas opciones']], resize_keyboard=True)
+    )
     return PROBLEMA
 
 async def recibir_problema(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['problema'] = update.message.text
-    await update.message.reply_text("💡 ¿Cuál es tu gasto mensual aproximado en electricidad?", 
-        reply_markup=ReplyKeyboardMarkup([['Menos de 50€', 'Entre 50€ y 100€'], ['Más de 100€', 'No lo sé seguro']], resize_keyboard=True))
+    await update.message.reply_text(
+        "Tomamos nota. 💡 ¿Cuál es tu gasto mensual aproximado en electricidad?", 
+        reply_markup=ReplyKeyboardMarkup([['Menos de 50€', 'Entre 50€ y 100€'], ['Más de 100€', 'No lo sé seguro']], resize_keyboard=True)
+    )
     return CONSUMO
 
 async def recibir_consumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['consumo'] = update.message.text
-    await update.message.reply_text("👤 Por favor, dime tu Nombre y Apellido para dirigirnos a ti:", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("¡Casi terminamos! 👤 Por favor, dime tu Nombre y Apellido para dirigirnos a ti:", reply_markup=ReplyKeyboardRemove())
     return NOMBRE
 
 async def recibir_nombre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -115,10 +130,17 @@ async def recibir_nombre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def recibir_barrio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     datos = context.user_data
     datos['barrio'] = update.message.text
-    chat_id = str(update.message.chat_id)
-    usuario_tg = f"@{update.message.from_user.username}" if update.message.from_user.username else "Sin @"
     
-    # Lógica inteligente basada en las respuestas del cliente
+    usuario_tg_bruto = update.message.from_user.username
+    usuario_final = f"@{usuario_tg_bruto}" if usuario_tg_bruto else f"Sin @ (Nombre: {update.message.from_user.first_name})"
+    chat_id = str(update.message.chat_id)
+    fecha_hoy = datetime.now().strftime("%d/%m/%Y")
+    
+    problema = datos.get('problema', '')
+    consumo = datos.get('consumo', '')
+    vivienda = datos.get('vivienda', '').lower()
+    
+    # Lógica inteligente
     if "Cortes" in problema or "Apagones" in problema:
         kit_recomendado = "Kit Anti-Apagones (Híbrido + Batería 5kWh)"
         precio = "5.490€"
@@ -132,14 +154,10 @@ async def recibir_barrio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         precio = "3.100€"
         ahorro_est = "Hasta 60%"
 
-    # ==========================================
-    # ⚡ 2. INYECCIÓN DE DATOS A POSTGRESQL (LA NUBE)
-    # ==========================================
+    # Guardar en Render PostgreSQL
     try:
         conexion = psycopg2.connect(DATABASE_URL)
         cursor = conexion.cursor()
-        
-        # El teléfono se guarda temporalmente como "Pendiente" (Cambio a %s)
         cursor.execute('''
             INSERT INTO clientes (
                 fecha_contacto, usuario_tg, chat_id, tipo_vivienda, problema, consumo, 
@@ -150,16 +168,13 @@ async def recibir_barrio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             datos['consumo'], datos['nombre'], datos['barrio'], "Pendiente", 
             "PRESUPUESTO ENVIADO AUTO", "PENDIENTE", kit_recomendado
         ))
-        
         conexion.commit()
         conexion.close()
-        print(f"✅ Nuevo Lead guardado en LA NUBE (Sin teléfono aún) con Kit: {kit_recomendado}")
+        print(f"✅ Nuevo Lead guardado en LA NUBE con Kit: {kit_recomendado}")
     except Exception as e:
         print(f"❌ Error guardando Lead en BD: {e}")
 
-    # ==========================================
-    # 💬 3. ENVIAR MENSAJE AL CLIENTE
-    # ==========================================
+    # Mensaje detallado
     mensaje_presupuesto = (
         f"✅ *¡Estudio completado con éxito, {datos['nombre']}!*\n\n"
         f"Basado en los datos de tu {vivienda} en {datos['barrio']}, "
@@ -173,23 +188,16 @@ async def recibir_barrio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         f"👷‍♂️ ¿Te gustaría que nuestro técnico visite tu domicilio para confirmar las medidas de forma totalmente *gratuita* y sin compromiso?"
     )
 
-    # Botones que conectan directamente con tu flujo Post-Venta
     teclado_venta = [
         [InlineKeyboardButton("✅ Sí, quiero la visita gratuita", callback_data=f"venta_si_{chat_id}")],
         [InlineKeyboardButton("❌ No por ahora, gracias", callback_data=f"venta_no_{chat_id}")]
     ]
-    reply_markup = InlineKeyboardMarkup(teclado_venta)
-
-    # Enviar el presupuesto con los botones
-    await update.message.reply_text(mensaje_presupuesto, parse_mode='Markdown', reply_markup=reply_markup)
     
-    # Limpiamos los datos temporales
+    await update.message.reply_text(mensaje_presupuesto, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(teclado_venta))
     context.user_data.clear()
     return ConversationHandler.END
 
-# ==========================================
-# 🎯 POST-VENTA: RECOLECCIÓN DE DATOS Y CALENDARIO
-# ==========================================
+# --- 5. POST-VENTA ---
 async def manejar_botones_venta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer() 
@@ -201,13 +209,10 @@ async def manejar_botones_venta(update: Update, context: ContextTypes.DEFAULT_TY
         cursor = conexion.cursor()
 
         if respuesta == "si":
-            # Actualizar estado del lead a VISITA ACEPTADA (Cambio a %s)
-            cursor.execute("UPDATE clientes SET estado_comercial = %s WHERE id = (SELECT id FROM clientes WHERE chat_id = %s ORDER BY id DESC LIMIT 1)", ("🔥 VISITA ACEPTADA", chat_id_cliente))
+            cursor.execute("UPDATE clientes SET estado_comercial = %s WHERE chat_id = %s", ("🔥 VISITA ACEPTADA", chat_id_cliente))
             conexion.commit()
             
             await query.edit_message_text(text=query.message.text + "\n\n*(Visita técnica aceptada ✅)*", parse_mode="Markdown")
-            
-            # 📞 AQUÍ PEDIMOS EL TELÉFONO DE FORMA MÁS NATURAL
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="✅ *¡Fantástico!* 🎉\n\nPara que nuestro técnico pueda contactarte el día de la visita, **por favor, indícanos tu número de teléfono:**", 
@@ -215,11 +220,10 @@ async def manejar_botones_venta(update: Update, context: ContextTypes.DEFAULT_TY
             )
             context.user_data['chat_id_cliente'] = chat_id_cliente
             conexion.close()
-            return TELEFONO_POST # Pasamos al nuevo estado
+            return TELEFONO_POST
             
         elif respuesta == "no":
-            # Borramos o marcamos como rechazado (Cambio a %s)
-            cursor.execute("DELETE FROM clientes WHERE id = (SELECT id FROM clientes WHERE chat_id = %s ORDER BY id DESC LIMIT 1)", (chat_id_cliente,))
+            cursor.execute("DELETE FROM clientes WHERE chat_id = %s", (chat_id_cliente,))
             conexion.commit()
             
             await query.edit_message_text(text=query.message.text + "\n\n*(Has declinado la propuesta ❌)*", parse_mode="Markdown")
@@ -237,16 +241,14 @@ async def recibir_telefono_post(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id_cliente = context.user_data.get('chat_id_cliente') or str(update.message.chat_id)
 
     try:
-        # Guardamos el teléfono en la BD (Cambio a %s)
         conexion = psycopg2.connect(DATABASE_URL)
         cursor = conexion.cursor()
-        cursor.execute("UPDATE clientes SET telefono = %s WHERE id = (SELECT id FROM clientes WHERE chat_id = %s ORDER BY id DESC LIMIT 1)", (telefono_cliente, chat_id_cliente))
+        cursor.execute("UPDATE clientes SET telefono = %s WHERE chat_id = %s", (telefono_cliente, chat_id_cliente))
         conexion.commit()
         conexion.close()
     except Exception as e:
-        print(f"Error guardando teléfono post-venta: {e}")
+        print(f"Error guardando teléfono: {e}")
 
-    # Ahora pedimos la dirección
     await update.message.reply_text(
         "¡Gracias! 📞\n\nAhora, **escríbeme tu dirección completa** (Calle, número, código postal y localidad) para que el técnico sepa dónde ir:", 
         parse_mode="Markdown"
@@ -258,10 +260,9 @@ async def recibir_direccion_post(update: Update, context: ContextTypes.DEFAULT_T
     chat_id_cliente = context.user_data.get('chat_id_cliente') or str(update.message.chat_id)
 
     try:
-        # Guardamos la dirección en la BD (Cambio a %s)
         conexion = psycopg2.connect(DATABASE_URL)
         cursor = conexion.cursor()
-        cursor.execute("UPDATE clientes SET direccion = %s WHERE id = (SELECT id FROM clientes WHERE chat_id = %s ORDER BY id DESC LIMIT 1)", (direccion_cliente, chat_id_cliente))
+        cursor.execute("UPDATE clientes SET direccion = %s WHERE chat_id = %s", (direccion_cliente, chat_id_cliente))
         conexion.commit()
         conexion.close()
     except Exception as e:
@@ -297,7 +298,7 @@ async def manejar_seleccion_fecha(update: Update, context: ContextTypes.DEFAULT_
     horas_libres = obtener_horas_disponibles(fecha_str)
     
     if not horas_libres:
-        await query.edit_message_text("Lo siento, nuestra agenda está completamente llena para ese día. Por favor, selecciona otra opción en el menú anterior (si la sesión expiró, contáctanos).")
+        await query.edit_message_text("Lo siento, nuestra agenda está completamente llena para ese día. Por favor, selecciona otra opción.")
         return
 
     teclado_horas = []
@@ -329,10 +330,9 @@ async def manejar_seleccion_hora(update: Update, context: ContextTypes.DEFAULT_T
     cita_final = f"{fecha_str} {hora_str}"
     
     try:
-        # Guardar la cita final en la BD (Cambio a %s)
         conexion = psycopg2.connect(DATABASE_URL)
         cursor = conexion.cursor()
-        cursor.execute("UPDATE clientes SET visita_tecnica = %s WHERE id = (SELECT id FROM clientes WHERE chat_id = %s ORDER BY id DESC LIMIT 1)", (cita_final, chat_id_cliente))
+        cursor.execute("UPDATE clientes SET visita_tecnica = %s WHERE chat_id = %s", (cita_final, chat_id_cliente))
         conexion.commit()
         conexion.close()
     except Exception as e:
@@ -342,9 +342,7 @@ async def manejar_seleccion_hora(update: Update, context: ContextTypes.DEFAULT_T
     await query.edit_message_text(mensaje_exito, parse_mode="Markdown")
 
 def main():
-    # ⚠️ TU TOKEN
-    TOKEN = "8715828197:AAFOcTECqUo-EygBaKA8EMBc8ohkn-S5FbA" 
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN_BOT).build()
     
     conv_handler_principal = ConversationHandler(
         entry_points=[CommandHandler("start", start), MessageHandler(filters.Regex(re.compile(r'^(hola|buenas|quiero)', re.IGNORECASE)), start)],
@@ -374,3 +372,7 @@ def main():
     app.add_handler(CallbackQueryHandler(manejar_seleccion_hora, pattern="^hora_"))
     
     print("☀️ Bot Comercial Automático en línea (Conectado a PostgreSQL en Render)...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
