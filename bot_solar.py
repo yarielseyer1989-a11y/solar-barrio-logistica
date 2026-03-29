@@ -1,20 +1,22 @@
 # -*- coding: utf-8 -*-
-import logging
+import http.server
+import socketserver
+import threading  # <--- ESTA ES LA QUE FALTA
 import os
-import re
-from datetime import datetime, timedelta
-import psycopg2 # <--- MOTOR DE BASE DE DATOS EN LA NUBE (PostgreSQL)
-import nest_asyncio
-nest_asyncio.apply()
+import asyncio
+import psycopg2
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+
 # --- TRUCO PARA RENDER (SERVIDOR WEB DUMMY) ---
 def start_dummy_server():
-    port = 8080
+    port = int(os.environ.get("PORT", 8080)) # Render nos da el puerto
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("", port), handler) as httpd:
         print(f"Servidor dummy corriendo en puerto {port}")
         httpd.serve_forever()
 
-# Iniciamos el servidor en un hilo aparte para que no bloquee al bot
+# Iniciamos el servidor en un hilo aparte
 threading.Thread(target=start_dummy_server, daemon=True).start()
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
