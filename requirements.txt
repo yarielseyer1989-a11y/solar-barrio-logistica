@@ -1,0 +1,7 @@
+streamlit
+pandas
+psycopg2-binary
+plotly
+requests
+python-telegram-bot
+nest_asyncio
