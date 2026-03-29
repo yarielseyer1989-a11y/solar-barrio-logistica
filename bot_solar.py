@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import http.server
 import socketserver
-import threading  # <--- ESTA ES LA QUE FALTA
+import threading
 import os
 import asyncio
 import psycopg2
@@ -10,14 +10,23 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 # --- TRUCO PARA RENDER (SERVIDOR WEB DUMMY) ---
 def start_dummy_server():
-    port = int(os.environ.get("PORT", 8080)) # Render nos da el puerto
+    # Render asigna un puerto dinámico, lo leemos de las variables de entorno
+    port = int(os.environ.get("PORT", 8080))
     handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", port), handler) as httpd:
-        print(f"Servidor dummy corriendo en puerto {port}")
+    # Usamos "0.0.0.0" para que sea accesible externamente por Render
+    with socketserver.TCPServer(("0.0.0.0", port), handler) as httpd:
+        print(f"✅ Servidor dummy activo en puerto {port}")
         httpd.serve_forever()
 
-# Iniciamos el servidor en un hilo aparte
+# Iniciamos el hilo ANTES de arrancar el bot
 threading.Thread(target=start_dummy_server, daemon=True).start()
+# -----------------------------------------------
+
+# --- CONFIGURACIÓN DE BASE DE DATOS ---
+DATABASE_URL = "postgresql://solardb_qsmc_user:e4m42uewjIpJCPeA53UEiVNHzKvHOmq3@dpg-d74gr9vpm1nc738uc8vg-a.frankfurt-postgres.render.com/solardb_qsmc"
+TOKEN_BOT = "8715828197:AAFOcTECqUo-EygBaKA8EMBc8ohkn-S5FbA"
+
+# ... (Aquí sigue el resto de tu código: estados, funciones del bot, etc.) ...
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 
